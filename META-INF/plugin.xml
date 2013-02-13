@@ -1,27 +1,22 @@
 <idea-plugin version="2">
-  <id>se.linuxgods.kreiger.useless-javadoc</id>
+  <id>com.linuxgods.kreiger.useless-javadoc</id>
   <name>Useless Javadoc</name>
   <version>1.0</version>
-  <vendor email="kreiger@linuxgods.com">Christoffer Hammarström</vendor>
+  <vendor email="christoffer.hammarstrom@linuxgods.com">Christoffer Hammarström</vendor>
 
   <description><![CDATA[
-      Enter short description for your plugin here.<br>
-      <small>most HTML tags may be used</small>
+      Finds and deletes useless Javadoc.
       ]]></description>
 
   <change-notes><![CDATA[
-      Add change notes here.<br>
-      <small>most HTML tags may be used</small>
       ]]>
   </change-notes>
 
   <!-- please see http://confluence.jetbrains.net/display/IDEADEV/Build+Number+Ranges for description -->
   <idea-version since-build="107.105"/>
 
-  <application-components>
-      <component>
-          <implementation-class>se.linuxgods.kreiger.UselessJavadocApplicationComponent</implementation-class>
-      </component>
-  </application-components>
+  <extensions defaultExtensionNs="com.intellij">
+      <localInspection displayName="Useless Javadoc" groupName="Javadoc issues" implementationClass="com.linuxgods.kreiger.UselessJavadocInspection"/>
+  </extensions>
 
 </idea-plugin>
