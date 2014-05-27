@@ -1,7 +1,7 @@
 package com.linuxgods.kreiger;
 
 import com.intellij.codeInspection.*;
-import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.*;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.javadoc.PsiDocTag;
@@ -19,8 +19,12 @@ import static com.linuxgods.kreiger.Similarity.levenshtein;
 
 public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
 
-    public static final double SIMILARITY_THRESHOLD = 0.5;
-    public static final DeleteQuickFix DELETE_QUICK_FIX = new DeleteQuickFix();
+    private static final double SIMILARITY_THRESHOLD = 0.5;
+    private static final DeleteQuickFix DELETE_QUICK_FIX = new DeleteQuickFix();
+
+    static boolean isEmptyDocComment(PsiElement parent) {
+        return parent instanceof PsiDocComment && getCommentText((PsiDocComment) parent, true).isEmpty();
+    }
 
     @Override
     public boolean isEnabledByDefault() {
@@ -43,9 +47,8 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         if (null == comment) {
             return;
         }
-        String commentTextWithTags = getCommentText(comment, true);
-        if (commentTextWithTags.isEmpty()) {
-            registerProblem(comment, "Empty javadoc.", holder);
+        if (isEmptyDocComment(comment)) {
+            registerProblem(comment, "Empty javadoc.", holder, null);
             return;
         }
 
@@ -53,15 +56,17 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         if (null == owner) {
             return;
         }
+
         String ownerName = owner.getName();
         if (null == ownerName) {
             return;
         }
 
+        String commentTextWithTags = getCommentText(comment, true);
         String commentTextWithoutTags = getCommentText(comment, false);
         String ownerType = getOwnerType(owner);
-        if (registerProblemIfTooSimilar("Comment matches name.", commentTextWithoutTags, ownerName, comment, holder)
-                || registerProblemIfTooSimilar("Comment matches return type.", commentTextWithoutTags, ownerType, comment, holder)) {
+        if (registerProblemIfTooSimilar("Comment matches name.", commentTextWithTags, ownerName, comment, null, holder)
+                || registerProblemIfTooSimilar("Comment matches return type.", commentTextWithTags, ownerType, comment, null, holder)) {
             return;
         }
 
@@ -69,8 +74,8 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         checkReturnTag(comment, ownerName, ownerType, holder);
     }
 
-    private void registerProblem(PsiElement element, String message, ProblemsHolder holder) {
-        holder.registerProblem(element, message, ProblemHighlightType.GENERIC_ERROR_OR_WARNING, DELETE_QUICK_FIX);
+    private void registerProblem(PsiElement element, String message, ProblemsHolder holder, TextRange rangeInElement) {
+        holder.registerProblem(element, message, ProblemHighlightType.GENERIC_ERROR_OR_WARNING, rangeInElement, DELETE_QUICK_FIX);
     }
 
     private String getOwnerType(PsiDocCommentOwner owner) {
@@ -91,16 +96,18 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         for (PsiDocTag paramTag : paramTags) {
             PsiDocTagValue valueElement = paramTag.getValueElement();
             if (null == valueElement) {
-                registerProblem(paramTag, "Missing @param name.", holder);
+                registerProblem(paramTag, "Missing @param name.", holder, null);
                 continue;
             }
             String parameterDescription = getElementsText(paramTag.getDataElements(), 1);
             if (normalize(parameterDescription).isEmpty()) {
-                registerProblem(paramTag, "Missing @param description.", holder);
+                registerProblem(paramTag, "Missing @param description.", holder, null);
                 continue;
             }
-            if (!registerProblemIfTooSimilar("@param description matches @param name.", parameterDescription, valueElement.getText(), paramTag, holder)) {
-                registerProblemIfTooSimilar("@param description matches method name.", parameterDescription, methodName, paramTag, holder);
+            parameterDescription = parameterDescription.replaceAll("[\\s*]+$", "");
+            TextRange textRange = new TextRange(0,paramTag.getDataElements()[1].getStartOffsetInParent()+parameterDescription.length());
+            if (!registerProblemIfTooSimilar("@param description matches @param name.", parameterDescription, valueElement.getText(), paramTag, textRange, holder)) {
+                registerProblemIfTooSimilar("@param description matches method name.", parameterDescription, methodName, paramTag, textRange, holder);
             }
         }
     }
@@ -112,12 +119,12 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         }
         PsiDocTagValue valueElement = returnTag.getValueElement();
         if (null == valueElement) {
-            registerProblem(returnTag, "Missing @return description.", holder);
+            registerProblem(returnTag, "Missing @return description.", holder, null);
             return;
         }
-        String returnValueDescription = getElementsText(returnTag.getDataElements(), 0);
-        if (!registerProblemIfTooSimilar("@return description matches return type.", returnValueDescription, ownerType, returnTag, holder)) {
-            registerProblemIfTooSimilar("@return description matches method name.", returnValueDescription, methodName, returnTag, holder);
+        String returnValueDescription = valueElement+" "+getElementsText(returnTag.getDataElements(), 1);
+        if (!registerProblemIfTooSimilar("@return description matches return type.", returnValueDescription, ownerType, returnTag, null, holder)) {
+            registerProblemIfTooSimilar("@return description matches method name.", returnValueDescription, methodName, returnTag, null, holder);
         }
     }
 
@@ -130,12 +137,12 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         return dataElementsStringBuilder.toString().trim();
     }
 
-    private boolean registerProblemIfTooSimilar(String message, String s1, String s2, PsiElement element, ProblemsHolder holder) {
+    private boolean registerProblemIfTooSimilar(String message, String s1, String s2, PsiElement element, TextRange rangeInElement, ProblemsHolder holder) {
         Similarity similarity = getSimilarity(s1, s2);
         if (similarity.toLongest() < SIMILARITY_THRESHOLD) {
             return false;
         }
-        registerProblem(element, message + " " + similarity, holder);
+        registerProblem(element, message + " " + similarity, holder, rangeInElement);
         return true;
     }
 
@@ -145,7 +152,7 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         return levenshtein(fixed1, fixed2);
     }
 
-    private static String getCommentText(PsiDocComment comment, boolean includeTags) {
+    static String getCommentText(PsiDocComment comment, boolean includeTags) {
         final StringBuilder commentText = new StringBuilder();
         for (PsiElement docCommentChild : comment.getChildren()) {
             if (docCommentChild instanceof PsiDocTag) {
@@ -168,43 +175,32 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         return commentText.toString().trim();
     }
 
-    private static class DeleteQuickFix implements LocalQuickFix {
-        @NotNull
-        @Override
-        public String getName() {
-            return "Delete useless Javadoc";
-        }
-
-        @NotNull
-        @Override
-        public String getFamilyName() {
-            return "Delete useless Javadoc";
-        }
-
-        @Override
-        public void applyFix(@NotNull Project project, @NotNull ProblemDescriptor problemDescriptor) {
-            PsiElement psiElement = problemDescriptor.getPsiElement();
-            PsiElement parent = psiElement.getParent();
-            psiElement.delete();
-            if (parent instanceof PsiDocComment && getCommentText((PsiDocComment) parent, true).isEmpty()) {
-                parent.delete();
-            }
-        }
-    }
-
     private final static List<String> STOP_WORDS = asList(
             "skapa", "spara", "skall", "till", "värde",
             "read", "create", "find", "fetch", "init",
+            "should",
             "instance", "return", "value", "list",
             "array", "property", "properties", "java");
 
     static String normalize(String s1) {
-        return unCamelCase(s1)
-                .replaceAll("\\b\\p{L}\\p{Ll}{1,2}\\b", "")
-                .toLowerCase()
-                .replaceAll("\\b(" + StringUtils.join(STOP_WORDS, "|") + ")\\p{Ll}?\\b", "")
-                .replaceAll("\\P{LD}+", " ")
-                .trim();
+        String unCamelCased = unCamelCase(s1);
+        String unCamelCasedLongWordsAndInitialisms = removeNonInitialismsUpToLength(unCamelCased, 3);
+        String lowerCaseUnCamelCasedLongWordsAndInitialisms = unCamelCasedLongWordsAndInitialisms.toLowerCase();
+        String lowerCaseUnCamelCasedLongWordsAndInitialismsWithStopWordsRemoved = removeStopWords(lowerCaseUnCamelCasedLongWordsAndInitialisms);
+        String lettersAndDigits = replaceNonLettersAndNonDigits(lowerCaseUnCamelCasedLongWordsAndInitialismsWithStopWordsRemoved, " ");
+        return lettersAndDigits.trim();
+    }
+
+    private static String removeStopWords(String s) {
+        return s.replaceAll("\\b(" + StringUtils.join(STOP_WORDS, "|") + ")\\p{Ll}?\\b", "");
+    }
+
+    private static String removeNonInitialismsUpToLength(String s, int length) {
+        return s.replaceAll("\\b\\p{L}\\p{Ll}{0," + (length - 1) + "}\\b", "");
+    }
+
+    private static String replaceNonLettersAndNonDigits(String s, String replacement) {
+        return s.replaceAll("\\P{LD}+", replacement);
     }
 
     public static String unCamelCase(String s) {
