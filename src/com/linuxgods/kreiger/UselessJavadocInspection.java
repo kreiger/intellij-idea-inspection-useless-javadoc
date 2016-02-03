@@ -1,27 +1,61 @@
 package com.linuxgods.kreiger;
 
 import com.intellij.codeInspection.*;
+import com.intellij.codeInspection.ui.ListTable;
+import com.intellij.codeInspection.ui.ListWrappingTableModel;
+import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.TextRange;
+import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.psi.*;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.javadoc.PsiDocTag;
 import com.intellij.psi.javadoc.PsiDocTagValue;
 import com.intellij.psi.javadoc.PsiDocToken;
+import com.siyeh.ig.ui.UiUtils;
 import org.apache.commons.lang.StringUtils;
+import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import javax.swing.*;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.intellij.psi.JavaDocTokenType.DOC_COMMENT_DATA;
 import static com.intellij.psi.JavaDocTokenType.DOC_COMMENT_LEADING_ASTERISKS;
 import static java.util.Arrays.asList;
 import static com.linuxgods.kreiger.Similarity.levenshtein;
+import static java.util.stream.Collectors.joining;
 
 public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
-
+    final static List<String> DEFAULT_STOP_WORDS = asList(
+            "skapa", "spara", "skall", "till", "värde",
+            "read", "create", "find", "fetch", "init",
+            "should",
+            "instance", "return", "value", "list",
+            "array", "property", "properties", "java").stream().sorted().collect(Collectors.toList());
     private static final double SIMILARITY_THRESHOLD = 0.5;
     private static final DeleteQuickFix DELETE_QUICK_FIX = new DeleteQuickFix();
+
+    private List<String> stopWords;
+
+    public UselessJavadocInspection() {
+        this.stopWords = new ArrayList<>(DEFAULT_STOP_WORDS);
+    }
+
+    @Override
+    public void readSettings(@NotNull Element node) throws InvalidDataException {
+        super.readSettings(node);
+        this.stopWords = Stream.of(node.getText().split(",")).sorted().collect(Collectors.toList());
+    }
+
+    @Override
+    public void writeSettings(@NotNull Element node) throws WriteExternalException {
+        node.addContent(stopWords.stream().sorted().collect(joining(",")));
+        super.writeSettings(node);
+    }
 
     static boolean isEmptyDocComment(PsiElement parent) {
         return parent instanceof PsiDocComment && getCommentText((PsiDocComment) parent, true).isEmpty();
@@ -30,6 +64,12 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
     @Override
     public boolean isEnabledByDefault() {
         return true;
+    }
+
+    @Nullable
+    @Override
+    public JComponent createOptionsPanel() {
+        return UiUtils.createAddRemovePanel(new ListTable(new ListWrappingTableModel(stopWords, "Stop words")));
     }
 
     @NotNull
@@ -101,7 +141,7 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
                 continue;
             }
             String parameterDescription = getElementsText(paramTag.getDataElements(), 1);
-            if (normalize(parameterDescription).isEmpty()) {
+            if (normalize(parameterDescription, stopWords).isEmpty()) {
                 registerProblem(paramTag, "Missing @param description.", holder, null);
                 continue;
             }
@@ -148,8 +188,8 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
     }
 
     private Similarity getSimilarity(String s1, String s2) {
-        String fixed1 = normalize(s1);
-        String fixed2 = normalize(s2);
+        String fixed1 = normalize(s1, stopWords);
+        String fixed2 = normalize(s2, stopWords);
         return levenshtein(fixed1, fixed2);
     }
 
@@ -176,28 +216,21 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         return commentText.toString().trim();
     }
 
-    private final static List<String> STOP_WORDS = asList(
-            "skapa", "spara", "skall", "till", "värde",
-            "read", "create", "find", "fetch", "init",
-            "should",
-            "instance", "return", "value", "list",
-            "array", "property", "properties", "java");
-
-    static String normalize(String s) {
+    static String normalize(String s, List<String> stopWords) {
         s = unCamelCase(s);
         s = removeNonInitialismsUpToLength(s, 3);
         s = s.toLowerCase();
-        s = removeStopWords(s);
+        s = removeStopWords(s, stopWords);
         s = replaceNonLettersAndNonDigitsWithSpaces(s);
         return s.trim();
     }
 
-    private static String removeNonInitialismsUpToLength3(String s) {
+    private String removeNonInitialismsUpToLength3(String s) {
         return removeNonInitialismsUpToLength(s, 3);
     }
 
-    private static String removeStopWords(String s) {
-        return s.replaceAll("\\b(" + StringUtils.join(STOP_WORDS, "|") + ")\\p{Ll}?\\b", "");
+    private static String removeStopWords(String s, List<String> stopWords) {
+        return s.replaceAll("\\b(" + StringUtils.join(stopWords, "|") + ")\\p{Ll}?\\b", "");
     }
 
     private static String removeNonInitialismsUpToLength(String s, int length) {
