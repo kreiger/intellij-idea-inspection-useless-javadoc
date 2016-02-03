@@ -11,6 +11,7 @@ import org.apache.commons.lang.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.function.Function;
 
 import static com.intellij.psi.JavaDocTokenType.DOC_COMMENT_DATA;
 import static com.intellij.psi.JavaDocTokenType.DOC_COMMENT_LEADING_ASTERISKS;
@@ -182,13 +183,17 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
             "instance", "return", "value", "list",
             "array", "property", "properties", "java");
 
-    static String normalize(String s1) {
-        String unCamelCased = unCamelCase(s1);
-        String unCamelCasedLongWordsAndInitialisms = removeNonInitialismsUpToLength(unCamelCased, 3);
-        String lowerCaseUnCamelCasedLongWordsAndInitialisms = unCamelCasedLongWordsAndInitialisms.toLowerCase();
-        String lowerCaseUnCamelCasedLongWordsAndInitialismsWithStopWordsRemoved = removeStopWords(lowerCaseUnCamelCasedLongWordsAndInitialisms);
-        String lettersAndDigits = replaceNonLettersAndNonDigits(lowerCaseUnCamelCasedLongWordsAndInitialismsWithStopWordsRemoved, " ");
-        return lettersAndDigits.trim();
+    static String normalize(String s) {
+        s = unCamelCase(s);
+        s = removeNonInitialismsUpToLength(s, 3);
+        s = s.toLowerCase();
+        s = removeStopWords(s);
+        s = replaceNonLettersAndNonDigitsWithSpaces(s);
+        return s.trim();
+    }
+
+    private static String removeNonInitialismsUpToLength3(String s) {
+        return removeNonInitialismsUpToLength(s, 3);
     }
 
     private static String removeStopWords(String s) {
@@ -199,8 +204,8 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
         return s.replaceAll("\\b\\p{L}\\p{Ll}{0," + (length - 1) + "}\\b", "");
     }
 
-    private static String replaceNonLettersAndNonDigits(String s, String replacement) {
-        return s.replaceAll("\\P{LD}+", replacement);
+    private static String replaceNonLettersAndNonDigitsWithSpaces(String s) {
+        return s.replaceAll("\\P{LD}+", " ");
     }
 
     public static String unCamelCase(String s) {
