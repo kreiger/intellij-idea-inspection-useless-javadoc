@@ -31,10 +31,8 @@ import static java.util.stream.Collectors.joining;
 
 public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
     final static List<String> DEFAULT_STOP_WORDS = asList(
-            "skapa", "spara", "skall", "till", "värde",
-            "read", "create", "find", "fetch", "init",
-            "should",
-            "instance", "return", "value", "list",
+            "read", "create", "find", "fetch", "init", "should",
+            "this", "instance", "return", "value", "list",
             "array", "property", "properties", "java").stream().sorted().collect(Collectors.toList());
     private static final double SIMILARITY_THRESHOLD = 0.5;
     private static final DeleteQuickFix DELETE_QUICK_FIX = new DeleteQuickFix();
@@ -93,10 +91,12 @@ public class UselessJavadocInspection extends BaseJavaLocalInspectionTool {
             return;
         }
 
-        PsiDocCommentOwner owner = comment.getOwner();
-        if (null == owner) {
+        PsiJavaDocumentedElement documentedElement = comment.getOwner();
+        if (!(documentedElement instanceof PsiDocCommentOwner)) {
             return;
         }
+
+        PsiDocCommentOwner owner = (PsiDocCommentOwner) documentedElement;
 
         String ownerName = owner.getName();
         if (null == ownerName) {

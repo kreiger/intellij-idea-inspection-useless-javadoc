@@ -20,6 +20,6 @@ public class UselessJavadocInspectionTest {
     public void testNormalize() {
         assertEquals("postnummer", normalize("setPostnummer", DEFAULT_STOP_WORDS));
         assertEquals("postnummer", normalize("returns property postnummer", DEFAULT_STOP_WORDS));
-        assertEquals("produkt", normalize(" returns XMLProdukt ", DEFAULT_STOP_WORDS));
+        assertEquals("xml produkt", normalize(" returns XMLProdukt ", DEFAULT_STOP_WORDS));
     }
 }

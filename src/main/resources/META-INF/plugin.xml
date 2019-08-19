@@ -1,0 +1,15 @@
+<idea-plugin>
+  <id>com.linuxgods.kreiger.useless-javadoc</id>
+  <name>Useless Javadoc</name>
+  <version>1.0</version>
+  <vendor email="christoffer.hammarstrom@linuxgods.com">Christoffer Hammarström</vendor>
+
+  <description>Finds and deletes useless redundant Javadoc.</description>
+
+  <idea-version since-build="183.*"/>
+
+  <extensions defaultExtensionNs="com.intellij">
+      <localInspection displayName="Useless Javadoc" groupName="Javadoc issues" implementationClass="com.linuxgods.kreiger.UselessJavadocInspection"/>
+  </extensions>
+
+</idea-plugin>
